@@ -241,7 +241,7 @@ namespace DogChessEngine
         /// <returns></returns>
         public static Board StartingPosition()
         {
-            return new Board(new Pieces[64] { 
+            return new Board(new Pieces[64] {
                 Pieces.WRook, Pieces.WKnight, Pieces.WBishop, Pieces.WQueen, Pieces.WKing, Pieces.WBishop, Pieces.WKnight, Pieces.WRook,
                 Pieces.WPawn, Pieces.WPawn, Pieces.WPawn, Pieces.WPawn, Pieces.WPawn, Pieces.WPawn, Pieces.WPawn, Pieces.WPawn,
                 Pieces.Empty, Pieces.Empty, Pieces.Empty, Pieces.Empty, Pieces.Empty, Pieces.Empty, Pieces.Empty, Pieces.Empty,
@@ -269,6 +269,11 @@ namespace DogChessEngine
                 Pieces.Empty, Pieces.Empty, Pieces.Empty, Pieces.Empty, Pieces.Empty, Pieces.Empty, Pieces.Empty, Pieces.Empty }, true);
         }
 
+        public static Board FromFEN(string fen)
+        {
+
+        }
+
         public Pieces GetPiece(ChessCoord coord)
         {
 
@@ -284,12 +289,22 @@ namespace DogChessEngine
 
         }
 
-        public static Board FromFEN(string fen)
+        public string ToFEN()
         {
 
         }
 
-        public string ToFEN()
+        public Board[] Moves()
+        {
+
+        }
+
+        public int MaterialEval()
+        {
+
+        }
+
+        public double ControlEval()
         {
 
         }

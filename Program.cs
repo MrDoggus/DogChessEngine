@@ -1,5 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Numerics;
+using System.Runtime.Serialization.Formatters.Binary;
 
 namespace DogChessEngine
 {
@@ -114,10 +117,36 @@ namespace DogChessEngine
             rank = (byte)r;
         }
 
-        byte file;
-        byte rank;
+        public byte file;
+        public byte rank;
+
+        public override string ToString()
+        {
+            switch (file)
+            {
+                case 0:
+                    return 'a' + ('0' + rank).ToString();
+                case 1:
+                    return 'b' + ('0' + rank).ToString();
+                case 2:
+                    return 'c' + ('0' + rank).ToString();
+                case 3:
+                    return 'd' + ('0' + rank).ToString();
+                case 4:
+                    return 'e' + ('0' + rank).ToString();
+                case 5:
+                    return 'f' + ('0' + rank).ToString();
+                case 6:
+                    return 'g' + ('0' + rank).ToString();
+                case 7:
+                    return 'h' + ('0' + rank).ToString();
+                default:
+                    return "";
+            }
+        }
     }
 
+    [Serializable]
     class Board
     {
         /// <summary>
@@ -161,7 +190,7 @@ namespace DogChessEngine
         public int FullMoveCount;
 
         //Stores all of the pieces on the board
-        private Pieces[] _board = new Pieces[64];
+        public Pieces[] _board = new Pieces[64];
 
         /// <summary>
         /// Two dimensional array of pieces
@@ -271,32 +300,509 @@ namespace DogChessEngine
 
         public static Board FromFEN(string fen)
         {
+            string[] fields = fen.Split(' ');
+            string[] ranks = fields[0].Split('/');
 
+            //Stores the board and current board position
+            Pieces[] board = new Pieces[64];
+            int boardPos = 0;
+
+            //Whos turn is it
+            bool turn;
+
+            //Castling rights
+            bool wkCastle = true;
+            bool wqCastle = true;
+            bool bkCastle = true;
+            bool bqCastle = true;
+
+            //En passant
+            ChessCoord? enPassant = null;
+
+            //Halfmove clock
+            int halfmoveClock;
+
+            //Fullmove count;
+            int fullmoveCount;
+
+            //Stores number of empty squares on a rank
+            int empty;
+
+            for (int i = 7; i >= 0; i--)
+            {
+                for (int j = 0; j < ranks[i].Length; j++)
+                {
+                    switch (ranks[i][j])
+                    {
+                        case 'R':
+                            board[boardPos] = Pieces.WRook;
+                            break;
+                        case 'N':
+                            board[boardPos] = Pieces.WKnight;
+                            break;
+                        case 'B':
+                            board[boardPos] = Pieces.WBishop;
+                            break;
+                        case 'Q':
+                            board[boardPos] = Pieces.WQueen;
+                            break;
+                        case 'K':
+                            board[boardPos] = Pieces.WKing;
+                            break;
+                        case 'P':
+                            board[boardPos] = Pieces.WPawn;
+                            break;
+                        case 'r':
+                            board[boardPos] = Pieces.BRook;
+                            break;
+                        case 'n':
+                            board[boardPos] = Pieces.BKnight;
+                            break;
+                        case 'b':
+                            board[boardPos] = Pieces.BBishop;
+                            break;
+                        case 'q':
+                            board[boardPos] = Pieces.BQueen;
+                            break;
+                        case 'k':
+                            board[boardPos] = Pieces.BKing;
+                            break;
+                        case 'p':
+                            board[boardPos] = Pieces.BPawn;
+                            break;
+                        default:
+                            empty = ranks[i][j] - '0';
+
+                            if (empty < 0 || empty > 8)
+                            {
+                                throw new FormatException("FEN string is not correct");
+                            }
+
+                            boardPos += empty;
+                            break;
+                    }
+
+                    boardPos++;
+                }
+            }
+
+            //Gets to active color
+            if (fields[1][0] == 'w')
+            {
+                turn = true;
+            }
+            else if (fields[1][0] == 'b')
+            {
+                turn = false;
+            }
+            else
+            {
+                throw new FormatException("FEN string is not formated correctly");
+            }
+
+            //Gets castling rights
+            if (fields[2][0] == '-')
+            {
+                wkCastle = false;
+                wqCastle = false;
+                bkCastle = false;
+                bqCastle = false;
+            }
+            else
+            {
+                for (int i = 0; i < fields[2].Length; i++)
+                {
+                    if (fields[2][i] == 'W')
+                    {
+                        wkCastle = true;
+                    }
+                    else if (fields[2][i] == 'Q')
+                    {
+                        wqCastle = true;
+                    }
+                    else if (fields[2][i] == 'w')
+                    {
+                        bkCastle = true;
+                    }
+                    else if (fields[2][i] == 'q')
+                    {
+                        bqCastle = true;
+                    }
+                    else
+                    {
+                        throw new FormatException("FEN string is not formated correctly");
+                    }
+                }
+            }
+
+            //Gets en passant availability
+            if (fields[3][0] == '-')
+            {
+                enPassant = null;
+            }
+            else
+            {
+                enPassant = new ChessCoord(fields[3]);
+            }
+
+            halfmoveClock = Convert.ToInt32(fields[4]);
+            fullmoveCount = Convert.ToInt32(fields[5]);
+
+            return new Board(board, turn, wkCastle, wqCastle, bkCastle, bqCastle, enPassant, (byte)halfmoveClock, fullmoveCount);
         }
 
         public Pieces GetPiece(ChessCoord coord)
         {
-
+            return _board[coord.file + coord.rank * 8];
         }
 
         public Pieces GetPiece(byte file, byte rank)
         {
-
+            return _board[file + rank * 8];
         }
 
         public Pieces GetPiece(int file, int rank)
         {
-
+            return _board[file + rank * 8];
         }
 
         public string ToFEN()
         {
+            string fen = "";
 
+            int emptyCount = 0;
+            //Loops through ranks
+            for (int i = 7; i >= 0; i--)
+            {
+                if (i != 7)
+                {
+                    fen += '/';
+                }
+
+                //Loops through files
+                for (int j = 0; j < 8; j++)
+                {
+                    if (emptyCount != 0 && GetPiece(j, i) != Pieces.Empty)
+                    {
+                        fen += '0' + emptyCount;
+                        emptyCount = 0;
+                    }
+
+                    switch (GetPiece(j, i))
+                    {
+                        case Pieces.Empty:
+                            emptyCount++;
+                            break;
+                        case Pieces.WPawn:
+                            emptyCount += 'P';
+                            break;
+                        case Pieces.BPawn:
+                            emptyCount += 'p';
+                            break;
+                        case Pieces.WRook:
+                            emptyCount += 'R';
+                            break;
+                        case Pieces.WKnight:
+                            emptyCount += 'N';
+                            break;
+                        case Pieces.WBishop:
+                            emptyCount += 'B';
+                            break;
+                        case Pieces.WQueen:
+                            emptyCount += 'Q';
+                            break;
+                        case Pieces.WKing:
+                            emptyCount += 'K';
+                            break;
+                        case Pieces.BRook:
+                            emptyCount += 'r';
+                            break;
+                        case Pieces.BKnight:
+                            emptyCount += 'n';
+                            break;
+                        case Pieces.BBishop:
+                            emptyCount += 'b';
+                            break;
+                        case Pieces.BQueen:
+                            emptyCount += 'q';
+                            break;
+                        case Pieces.BKing:
+                            emptyCount += 'k';
+                            break;
+                    }
+                }
+            }
+
+            //Active color
+            fen += ' ';
+            if (Turn)
+            {
+                fen += 'w';
+            }
+            else
+            {
+                fen += 'b';
+            }
+
+            //Castling rights
+            fen += ' ';
+            if (WKCastle)
+            {
+                fen += 'K';
+            }
+            if (WQCastle)
+            {
+                fen += 'Q';
+            }
+            if (BKCastle)
+            {
+                fen += 'k';
+            }
+            if (BQCastle)
+            {
+                fen += 'q';
+            }
+
+            //EnPassant?
+            fen += ' ';
+            if (EnPassant == null)
+            {
+                fen += '-';
+            }
+            else
+            {
+                fen += EnPassant.ToString();
+            }
+
+            //Half move count and fullmove count
+            fen += ' ' + HalfmoveClock.ToString() + ' ' + FullMoveCount.ToString();
+
+            return fen;
         }
 
         public Board[] Moves()
         {
 
+        }
+
+        public Board[] Moves(ChessCoord chessCoord)
+        {
+
+        }
+
+        public Board[] Moves(int index)
+        {
+            List<Board> boards = new List<Board>();
+            Board temp;
+            int tempIndex;
+            //Board temp2;
+
+            switch (_board[index])
+            {
+                case Pieces.Empty:
+                    return boards.ToArray();
+                case Pieces.WPawn:
+                    //If not white's turn
+                    if (!Turn)
+                    {
+                        return boards.ToArray();
+                    }
+                    if (_board[index + 8] == Pieces.Empty)
+                    {
+                        //Removes pawn from its current position
+                        temp = DeepCopy();
+                        temp._board[index] = Pieces.Empty;
+
+                        //Pawn promotion
+                        if (index > 47)
+                        {
+                            temp._board[index + 8] = Pieces.WBishop;
+                            boards.Add(temp.DeepCopy());
+
+                            temp._board[index + 8] = Pieces.WKnight;
+                            boards.Add(temp.DeepCopy());
+
+                            temp._board[index + 8] = Pieces.WRook;
+                            boards.Add(temp.DeepCopy());
+
+                            temp._board[index + 8] = Pieces.WQueen;
+                            boards.Add(temp.DeepCopy());
+                        }
+                        else
+                        {
+                            
+                            temp._board[index + 8] = Pieces.WPawn;
+                            boards.Add(temp.DeepCopy());
+                        }
+                    }
+                    //Dont forget enPassant
+                    if ((_board[index + 9] != Pieces.Empty || index + 9 == EnPassant.Value.file + EnPassant.Value.rank * 8) && (index % 8) != 7)
+                    {
+                        //Removes pawn from its current position
+                        temp = DeepCopy();
+                        temp._board[index] = Pieces.Empty;
+
+                        //Pawn promotion
+                        if (index > 47)
+                        {
+                            temp._board[index + 9] = Pieces.WBishop;
+                            boards.Add(temp.DeepCopy());
+
+                            temp._board[index + 9] = Pieces.WKnight;
+                            boards.Add(temp.DeepCopy());
+
+                            temp._board[index + 9] = Pieces.WRook;
+                            boards.Add(temp.DeepCopy());
+
+                            temp._board[index + 9] = Pieces.WQueen;
+                            boards.Add(temp.DeepCopy());
+                        }
+                        else
+                        {
+                            temp._board[index + 9] = Pieces.WPawn;
+                            if (index + 9 == EnPassant.Value.file + EnPassant.Value.rank * 8)
+                            {
+                                temp._board[index + 1] = Pieces.Empty;
+                            }
+                            boards.Add(temp.DeepCopy());
+                        }
+                    }
+                    if ((_board[index + 7] != Pieces.Empty || index + 9 == EnPassant.Value.file + EnPassant.Value.rank * 8) && (index % 8) != 0)
+                    {
+                        //Removes pawn from its current position
+                        temp = DeepCopy();
+                        temp._board[index] = Pieces.Empty;
+
+                        //Pawn promotion
+                        if (index > 47)
+                        {
+                            temp._board[index + 7] = Pieces.WBishop;
+                            boards.Add(temp.DeepCopy());
+
+                            temp._board[index + 7] = Pieces.WKnight;
+                            boards.Add(temp.DeepCopy());
+
+                            temp._board[index + 7] = Pieces.WRook;
+                            boards.Add(temp.DeepCopy());
+
+                            temp._board[index + 7] = Pieces.WQueen;
+                            boards.Add(temp.DeepCopy());
+                        }
+                        else
+                        {
+                            temp._board[index + 7] = Pieces.WPawn;
+                            if (index + 7 == EnPassant.Value.file + EnPassant.Value.rank * 8)
+                            {
+                                temp._board[index - 1] = Pieces.Empty;
+                            }
+                            boards.Add(temp.DeepCopy());
+                        }
+                    }
+                    if (index < 16 && _board[index + 16] == Pieces.Empty && _board[index + 8] == Pieces.Empty)
+                    {
+                        //Removes pawn from its current position
+                        temp = DeepCopy();
+                        temp._board[index] = Pieces.Empty;
+                        temp._board[index + 16] = Pieces.WPawn;
+                        temp.EnPassant = new ChessCoord(index % 8, (index + 8) / 8);
+
+                        boards.Add(temp.DeepCopy());
+                    }
+                    break;
+                case Pieces.WRook:
+                    //If not white's turn
+                    if (!Turn)
+                    {
+                        return boards.ToArray();
+                    }
+                    //Moving rook to the left
+                    if (index % 8 != 0)
+                    {
+                        /*
+                        temp = DeepCopy();
+                        temp._board[index] = Pieces.Empty;
+
+                        tempIndex = index;
+                        do
+                        {
+                            index -= 1;
+                        } while (true);
+                        */
+                    }
+                    break;
+                case Pieces.WKnight:
+                    //If not white's turn
+                    if (!Turn)
+                    {
+                        return boards.ToArray();
+                    }
+                    break;
+                case Pieces.WBishop:
+                    //If not white's turn
+                    if (!Turn)
+                    {
+                        return boards.ToArray();
+                    }
+                    break;
+                case Pieces.WQueen:
+                    //If not white's turn
+                    if (!Turn)
+                    {
+                        return boards.ToArray();
+                    }
+                    break;
+                case Pieces.WKing:
+                    //If not white's turn
+                    if (!Turn)
+                    {
+                        return boards.ToArray();
+                    }
+                    break;
+                case Pieces.BPawn:
+                    //If not blacks's turn
+                    if (Turn)
+                    {
+                        return boards.ToArray();
+                    }
+                    break;
+                case Pieces.BRook:
+                    //If not blacks's turn
+                    if (Turn)
+                    {
+                        return boards.ToArray();
+                    }
+                    break;
+                case Pieces.BKnight:
+                    //If not blacks's turn
+                    if (Turn)
+                    {
+                        return boards.ToArray();
+                    }
+                    break;
+                case Pieces.BBishop:
+                    //If not blacks's turn
+                    if (Turn)
+                    {
+                        return boards.ToArray();
+                    }
+                    break;
+                case Pieces.BQueen:
+                    //If not blacks's turn
+                    if (Turn)
+                    {
+                        return boards.ToArray();
+                    }
+                    break;
+                case Pieces.BKing:
+                    //If not blacks's turn
+                    if (Turn)
+                    {
+                        return boards.ToArray();
+                    }
+                    break;
+                default:
+                    break;
+            }
         }
 
         public int MaterialEval()
@@ -307,6 +813,23 @@ namespace DogChessEngine
         public double ControlEval()
         {
 
+        }
+
+        public Board DeepCopy()
+        {
+            //https://stackoverflow.com/questions/1031023/copy-a-class-c-sharp
+            using (MemoryStream ms = new MemoryStream())
+            {
+                BinaryFormatter formatter = new BinaryFormatter();
+                formatter.Serialize(ms, this);
+                ms.Position = 0;
+                return (Board)formatter.Deserialize(ms);
+            }
+        }
+
+        public override string ToString()
+        {
+            return base.ToString();
         }
     }
 }

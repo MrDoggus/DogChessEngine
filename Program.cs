@@ -33,6 +33,33 @@ namespace DogChessEngine
         BKing
     }
 
+    static class PiecesMethods
+    {
+        public static bool IsBlack(this Pieces piece)
+        {
+            if (piece == Pieces.BPawn || piece == Pieces.BRook || piece == Pieces.BKnight || piece == Pieces.BBishop || piece == Pieces.BQueen || piece == Pieces.BKing)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        public static bool IsWhite(this Pieces piece)
+        {
+            if (piece == Pieces.WPawn || piece == Pieces.WRook || piece == Pieces.WKnight || piece == Pieces.WBishop || piece == Pieces.WQueen || piece == Pieces.WKing)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+    }
+
     /// <summary>
     /// Stores a coordinate
     /// </summary>
@@ -144,6 +171,18 @@ namespace DogChessEngine
                     return "";
             }
         }
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(file, rank);
+        }
+
+        public override bool Equals(object obj)
+        {
+            return obj is ChessCoord coord &&
+                   file == coord.file &&
+                   rank == coord.rank;
+        }
     }
 
     [Serializable]
@@ -173,6 +212,26 @@ namespace DogChessEngine
         /// True if black can castle queen-side
         /// </summary>
         public bool BQCastle;
+
+        /// <summary>
+        /// True if white castled king-side
+        /// </summary>
+        public bool WKCastled;
+
+        /// <summary>
+        /// True if white castled queen-side
+        /// </summary>
+        public bool WQCastled;
+
+        /// <summary>
+        /// True if black castled king-side
+        /// </summary>
+        public bool BKCastled;
+
+        /// <summary>
+        /// True if black castled queen-side
+        /// </summary>
+        public bool BQCastled;
 
         /// <summary>
         /// If EnPassant is available the target square coord will be stored here
@@ -298,6 +357,11 @@ namespace DogChessEngine
                 Pieces.Empty, Pieces.Empty, Pieces.Empty, Pieces.Empty, Pieces.Empty, Pieces.Empty, Pieces.Empty, Pieces.Empty }, true);
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="fen"></param>
+        /// <returns></returns>
         public static Board FromFEN(string fen)
         {
             string[] fields = fen.Split(' ');
@@ -451,6 +515,11 @@ namespace DogChessEngine
             return new Board(board, turn, wkCastle, wqCastle, bkCastle, bqCastle, enPassant, (byte)halfmoveClock, fullmoveCount);
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="coord"></param>
+        /// <returns></returns>
         public Pieces GetPiece(ChessCoord coord)
         {
             return _board[coord.file + coord.rank * 8];
@@ -594,27 +663,37 @@ namespace DogChessEngine
         {
             List<Board> boards = new List<Board>();
             Board temp;
+            Board temp2;
+
             int tempIndex;
             //Board temp2;
 
             switch (_board[index])
             {
                 case Pieces.Empty:
-                    return boards.ToArray();
+                    break;
                 case Pieces.WPawn:
                     //If not white's turn
                     if (!Turn)
                     {
-                        return boards.ToArray();
+                        break;
                     }
+
+                    temp2 = DeepCopy();
+                    temp2._board[index] = Pieces.Empty;
+                    temp2.BKCastled = false;
+                    temp2.BQCastled = false;
+                    temp2.Turn = false;
+                    temp2.EnPassant = null;
+                    temp2.HalfmoveClock = 0;
+                    
+                    //Moving pawn one square up
                     if (_board[index + 8] == Pieces.Empty)
                     {
-                        //Removes pawn from its current position
-                        temp = DeepCopy();
-                        temp._board[index] = Pieces.Empty;
+                        temp = temp2.DeepCopy();
 
                         //Pawn promotion
-                        if (index > 47)
+                        if (index > 55)
                         {
                             temp._board[index + 8] = Pieces.WBishop;
                             boards.Add(temp.DeepCopy());
@@ -628,180 +707,1715 @@ namespace DogChessEngine
                             temp._board[index + 8] = Pieces.WQueen;
                             boards.Add(temp.DeepCopy());
                         }
+                        //If not promoting
                         else
                         {
-                            
                             temp._board[index + 8] = Pieces.WPawn;
                             boards.Add(temp.DeepCopy());
                         }
                     }
-                    //Dont forget enPassant
-                    if ((_board[index + 9] != Pieces.Empty || index + 9 == EnPassant.Value.file + EnPassant.Value.rank * 8) && (index % 8) != 7)
+                    
+                    //Taking to the right
+                    if (_board[index + 9].IsBlack() && (index % 8) != 7)
                     {
-                        //Removes pawn from its current position
-                        temp = DeepCopy();
-                        temp._board[index] = Pieces.Empty;
+                        temp = temp2.DeepCopy();
 
                         //Pawn promotion
                         if (index > 47)
                         {
-                            temp._board[index + 9] = Pieces.WBishop;
-                            boards.Add(temp.DeepCopy());
 
                             temp._board[index + 9] = Pieces.WKnight;
                             boards.Add(temp.DeepCopy());
 
-                            temp._board[index + 9] = Pieces.WRook;
-                            boards.Add(temp.DeepCopy());
-
                             temp._board[index + 9] = Pieces.WQueen;
                             boards.Add(temp.DeepCopy());
-                        }
+                        }//If not promoting
                         else
                         {
                             temp._board[index + 9] = Pieces.WPawn;
-                            if (index + 9 == EnPassant.Value.file + EnPassant.Value.rank * 8)
-                            {
-                                temp._board[index + 1] = Pieces.Empty;
-                            }
                             boards.Add(temp.DeepCopy());
                         }
                     }
-                    if ((_board[index + 7] != Pieces.Empty || index + 9 == EnPassant.Value.file + EnPassant.Value.rank * 8) && (index % 8) != 0)
+
+                    //Taking to the right en passant
+                    if (index + 9 == EnPassant.Value.file + EnPassant.Value.rank * 8)
                     {
-                        //Removes pawn from its current position
-                        temp = DeepCopy();
-                        temp._board[index] = Pieces.Empty;
+                        temp = temp2.DeepCopy();
+                        temp._board[index + 9] = Pieces.WPawn;
+                        temp._board[index + 1] = Pieces.Empty;
+                        boards.Add(temp.DeepCopy());
+                    }
+                    
+                    //Taking to the left + en passant
+                    if (_board[index + 7].IsBlack() && (index % 8) != 0)
+                    {
+                        temp = temp2.DeepCopy();
 
                         //Pawn promotion
                         if (index > 47)
                         {
-                            temp._board[index + 7] = Pieces.WBishop;
-                            boards.Add(temp.DeepCopy());
-
                             temp._board[index + 7] = Pieces.WKnight;
-                            boards.Add(temp.DeepCopy());
-
-                            temp._board[index + 7] = Pieces.WRook;
                             boards.Add(temp.DeepCopy());
 
                             temp._board[index + 7] = Pieces.WQueen;
                             boards.Add(temp.DeepCopy());
                         }
+                        //If not promoting
                         else
                         {
                             temp._board[index + 7] = Pieces.WPawn;
-                            if (index + 7 == EnPassant.Value.file + EnPassant.Value.rank * 8)
-                            {
-                                temp._board[index - 1] = Pieces.Empty;
-                            }
                             boards.Add(temp.DeepCopy());
                         }
                     }
+
+                    //Taking to the left en passant
+                    if (index + 9 == EnPassant.Value.file + EnPassant.Value.rank * 8)
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index + 7] = Pieces.WPawn;
+                        temp._board[index - 1] = Pieces.Empty;
+                        boards.Add(temp.DeepCopy());
+                    }
+                    
+                    //Moving up two squares
                     if (index < 16 && _board[index + 16] == Pieces.Empty && _board[index + 8] == Pieces.Empty)
                     {
-                        //Removes pawn from its current position
-                        temp = DeepCopy();
-                        temp._board[index] = Pieces.Empty;
+                        temp = temp2.DeepCopy();
+
                         temp._board[index + 16] = Pieces.WPawn;
                         temp.EnPassant = new ChessCoord(index % 8, (index + 8) / 8);
 
                         boards.Add(temp.DeepCopy());
                     }
+                    
                     break;
+
                 case Pieces.WRook:
                     //If not white's turn
                     if (!Turn)
                     {
-                        return boards.ToArray();
+                        break;
                     }
-                    //Moving rook to the left
-                    if (index % 8 != 0)
-                    {
-                        /*
-                        temp = DeepCopy();
-                        temp._board[index] = Pieces.Empty;
 
+                    temp2 = DeepCopy();
+                    temp2._board[index] = Pieces.Empty;
+                    temp2.BKCastled = false;
+                    temp2.BQCastled = false;
+                    temp2.Turn = false;
+                    temp2.EnPassant = null;
+                    temp2.HalfmoveClock++;
+
+                    //Moving rook to the left (if not on the far left side of the board)
+                    if (index % 8 != 0 && !_board[index - 1].IsWhite())
+                    {
                         tempIndex = index;
+
+                        //Loops until white piece is found, edge of board is found, or black piece is found
                         do
                         {
-                            index -= 1;
-                        } while (true);
-                        */
+                            tempIndex -= 1;
+
+                            temp = temp2.DeepCopy();
+                            temp._board[tempIndex] = Pieces.WRook;
+                            if (index == 7)
+                            {
+                                temp.WKCastle = false;
+                            }
+
+                            if (_board[tempIndex].IsBlack())
+                            {
+                                temp.HalfmoveClock = 0;
+                                boards.Add(temp.DeepCopy());
+                                break;
+                            }
+
+                            boards.Add(temp.DeepCopy());
+
+                        } while (index % 8 != 0 && !_board[index - 1].IsWhite());
                     }
+                    
+                    //Moving to the right
+                    if (index % 8 != 7 && !_board[index + 1].IsWhite())
+                    {
+                        tempIndex = index;
+
+                        //Loops untill white piece is found, edge of board is found, or black piece is found
+                        do
+                        {
+                            tempIndex += 1;
+
+                            temp = temp2.DeepCopy();
+                            temp._board[tempIndex] = Pieces.WRook;
+                            if (index == 0)
+                            {
+                                temp.WQCastle = false;
+                            }
+
+                            if (_board[tempIndex].IsBlack())
+                            {
+                                temp.HalfmoveClock = 0;
+                                boards.Add(temp.DeepCopy());
+                                break;
+                            }
+
+                            boards.Add(temp.DeepCopy());
+
+                        } while (index % 8 != 7 && !_board[index + 1].IsWhite());
+                    }
+                    
+                    //Moving up
+                    if (index / 8 != 7 && !_board[index + 8].IsWhite())
+                    {
+                        tempIndex = index;
+
+                        //Loops untill white piece is found, edge of board is found, or black piece is found
+                        do
+                        {
+                            tempIndex += 8;
+
+                            temp = temp2.DeepCopy();
+                            temp._board[tempIndex] = Pieces.WRook;
+                            if (index == 0)
+                            {
+                                temp.WQCastle = false;
+                            }
+                            else if (index == 7)
+                            {
+                                temp.WKCastle = false;
+                            }
+                            
+                            if (_board[tempIndex].IsBlack())
+                            {
+                                temp.HalfmoveClock = 0;
+                                boards.Add(temp.DeepCopy());
+                                break;
+                            }
+
+                            boards.Add(temp.DeepCopy());
+
+                        } while (index / 8 != 7 && !_board[index + 8].IsWhite());
+                    }
+                    
+                    //Moving down
+                    if (index / 8 != 0 && !_board[index - 8].IsWhite())
+                    {
+                        tempIndex = index;
+
+                        //Loops untill white piece is found, edge of board is found, or black piece is found
+                        do
+                        {
+                            tempIndex -= 8;
+
+                            temp = temp2.DeepCopy();
+                            temp._board[tempIndex] = Pieces.WRook;
+
+                            if (_board[tempIndex].IsBlack())
+                            {
+                                temp.HalfmoveClock = 0;
+                                boards.Add(temp.DeepCopy());
+                                break;
+                            }
+
+                            boards.Add(temp.DeepCopy());
+
+                        } while (index / 8 != 0 && !_board[index - 8].IsWhite());
+                    }
+                    
                     break;
+
                 case Pieces.WKnight:
                     //If not white's turn
                     if (!Turn)
                     {
-                        return boards.ToArray();
+                        break;
                     }
+
+                    temp2 = DeepCopy();
+                    temp2._board[index] = Pieces.Empty;
+                    temp2.BKCastled = false;
+                    temp2.BQCastled = false;
+                    temp2.Turn = false;
+                    temp2.EnPassant = null;
+                    temp2.HalfmoveClock++;
+
+                    // Quad 2 lower
+                    if (((index - 2) % 8 < index % 8) && ((index + 8) / 8 % 8 > index / 8) && !_board[index + 6].IsWhite())
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index + 6] = Pieces.WKnight;
+
+                        if (_board[index + 6].IsBlack())
+                        {
+                            temp.HalfmoveClock = 0;
+                        }
+
+                        boards.Add(temp.DeepCopy());
+                    }
+                    
+                    // Quad 2 higher
+                    if (((index - 1) % 8 < index % 8) && ((index + 16) / 8 % 8 > index / 8) && !_board[index + 15].IsWhite())
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index + 15] = Pieces.WKnight;
+
+                        if (_board[index + 15].IsBlack())
+                        {
+                            temp.HalfmoveClock = 0;
+                        }
+
+                        boards.Add(temp.DeepCopy());
+                    }
+                    
+                    // Quad 1 higher
+                    if (((index + 1) % 8 > index % 8) && ((index + 16) / 8 % 8 > index / 8) && !_board[index + 17].IsWhite())
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index + 17] = Pieces.WKnight;
+
+                        if (_board[index + 17].IsBlack())
+                        {
+                            temp.HalfmoveClock = 0;
+                        }
+
+                        boards.Add(temp.DeepCopy());
+                    }
+                    
+                    // Quad 1 lower
+                    if (((index + 2) % 8 > index % 8) && ((index + 8) / 8 % 8 > index / 8) && !_board[index + 10].IsWhite())
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index + 10] = Pieces.WKnight;
+
+                        if (_board[index + 10].IsBlack())
+                        {
+                            temp.HalfmoveClock = 0;
+                        }
+
+                        boards.Add(temp.DeepCopy());
+                    }
+                    
+                    // Quad 4 higher
+                    if (((index + 2) % 8 > index % 8) && ((index - 8) / 8 % 8 < index / 8) && !_board[index - 6].IsWhite())
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index - 6] = Pieces.WKnight;
+
+                        if (_board[index - 6].IsBlack())
+                        {
+                            temp.HalfmoveClock = 0;
+                        }
+
+                        boards.Add(temp.DeepCopy());
+                    }
+                    
+                    // Quad 4 lower
+                    if (((index + 1) % 8 > index % 8) && ((index - 16) / 8 % 8 < index / 8) && !_board[index - 15].IsWhite())
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index - 15] = Pieces.WKnight;
+
+                        if (_board[index - 15].IsBlack())
+                        {
+                            temp.HalfmoveClock = 0;
+                        }
+
+                        boards.Add(temp.DeepCopy());
+                    }
+                    
+                    // Quad 3 lower
+                    if (((index - 1) % 8 < index % 8) && ((index - 16) / 8 % 8 < index / 8) && !_board[index - 17].IsWhite())
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index - 17] = Pieces.WKnight;
+
+                        if (_board[index - 17].IsBlack())
+                        {
+                            temp.HalfmoveClock = 0;
+                        }
+
+                        boards.Add(temp.DeepCopy());
+                    }
+                    
+                    // Quad 3 higher
+                    if (((index - 2) % 8 < index % 8) && ((index - 8) / 8 % 8 < index / 8) && !_board[index - 10].IsWhite())
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index - 10] = Pieces.WKnight;
+
+                        if (_board[index - 10].IsBlack())
+                        {
+                            temp.HalfmoveClock = 0;
+                        }
+
+                        boards.Add(temp.DeepCopy());
+                    }
+
                     break;
+
                 case Pieces.WBishop:
                     //If not white's turn
                     if (!Turn)
                     {
-                        return boards.ToArray();
+                        break;
                     }
+
+                    temp2 = DeepCopy();
+                    temp2._board[index] = Pieces.Empty;
+                    temp2.BKCastled = false;
+                    temp2.BQCastled = false;
+                    temp2.Turn = false;
+                    temp2.EnPassant = null;
+                    temp2.HalfmoveClock++;
+
+                    //Moving bishop in quad 1 (if not on the far left side of the board)
+                    if (index % 8 != 7 && index / 8 != 7 && !_board[index + 9].IsWhite())
+                    {
+                        tempIndex = index;
+
+                        //Loops untill white piece is found, edge of board is found, or black piece is found
+                        do
+                        {
+                            tempIndex += 9;
+
+                            temp = temp2.DeepCopy();
+                            temp._board[tempIndex] = Pieces.WBishop;
+
+                            if (_board[tempIndex].IsBlack())
+                            {
+                                temp.HalfmoveClock = 0;
+                                boards.Add(temp.DeepCopy());
+                                break;
+                            }
+
+                            boards.Add(temp.DeepCopy());
+
+                        } while (tempIndex % 8 != 7 && tempIndex / 8 != 7 && !_board[tempIndex + 9].IsWhite());
+                    }
+
+                    //Moving bishop in quad 2 (if not on the far left side of the board)
+                    if (index % 8 != 0 && index / 8 != 7 && !_board[index + 7].IsWhite())
+                    {
+                        tempIndex = index;
+
+                        //Loops untill white piece is found, edge of board is found, or black piece is found
+                        do
+                        {
+                            tempIndex += 7;
+
+                            temp = temp2.DeepCopy();
+                            temp._board[tempIndex] = Pieces.WBishop;
+
+                            if (_board[tempIndex].IsBlack())
+                            {
+                                temp.HalfmoveClock = 0;
+                                boards.Add(temp.DeepCopy());
+                                break;
+                            }
+
+                            boards.Add(temp.DeepCopy());
+
+                        } while (tempIndex % 8 != 0 && tempIndex / 8 != 7 && !_board[tempIndex + 7].IsWhite());
+                    }
+
+                    //Moving bishop in quad 3 (if not on the far left side of the board)
+                    if (index % 8 != 0 && index / 8 != 0 && !_board[index - 9].IsWhite())
+                    {
+                        tempIndex = index;
+
+                        //Loops untill white piece is found, edge of board is found, or black piece is found
+                        do
+                        {
+                            tempIndex -= 9;
+
+                            temp = temp2.DeepCopy();
+                            temp._board[tempIndex] = Pieces.WBishop;
+
+                            if (_board[tempIndex].IsBlack())
+                            {
+                                temp.HalfmoveClock = 0;
+                                boards.Add(temp.DeepCopy());
+                                break;
+                            }
+
+                            boards.Add(temp.DeepCopy());
+
+                        } while (tempIndex % 8 != 0 && tempIndex / 8 != 0 && !_board[tempIndex - 9].IsWhite());
+                    }
+
+                    //Moving bishop in quad 1 (if not on the far left side of the board)
+                    if (index % 8 != 7 && index / 8 != 0 && !_board[index - 7].IsWhite())
+                    {
+                        tempIndex = index;
+
+                        //Loops untill white piece is found, edge of board is found, or black piece is found
+                        do
+                        {
+                            tempIndex -= 7;
+
+                            temp = temp2.DeepCopy();
+                            temp._board[tempIndex] = Pieces.WBishop;
+
+                            if (_board[tempIndex].IsBlack())
+                            {
+                                temp.HalfmoveClock = 0;
+                                boards.Add(temp.DeepCopy());
+                                break;
+                            }
+
+                            boards.Add(temp.DeepCopy());
+
+                        } while (tempIndex % 8 != 7 && tempIndex / 8 != 0 && !_board[tempIndex - 7].IsWhite());
+                    }
+
                     break;
+
                 case Pieces.WQueen:
                     //If not white's turn
                     if (!Turn)
                     {
-                        return boards.ToArray();
+                        break;
                     }
+
+                    temp2 = DeepCopy();
+                    temp2._board[index] = Pieces.Empty;
+                    temp2.BKCastled = false;
+                    temp2.BQCastled = false;
+                    temp2.Turn = false;
+                    temp2.EnPassant = null;
+                    temp2.HalfmoveClock++;
+
+                    //Moving queen to the left (if not on the far left side of the board)
+                    if (index % 8 != 0 && !_board[index - 1].IsWhite())
+                    {
+                        tempIndex = index;
+
+                        //Loops untill white piece is found, edge of board is found, or black piece is found
+                        do
+                        {
+                            tempIndex -= 1;
+
+                            temp = temp2.DeepCopy();
+                            temp._board[tempIndex] = Pieces.WQueen;
+
+                            if (_board[tempIndex].IsBlack())
+                            {
+                                temp.HalfmoveClock = 0;
+                                boards.Add(temp.DeepCopy());
+                                break;
+                            }
+
+                            boards.Add(temp.DeepCopy());
+
+                        } while (index % 8 != 0 && !_board[index - 1].IsWhite());
+                    }
+
+                    //Moving to the right
+                    if (index % 8 != 7 && !_board[index + 1].IsWhite())
+                    {
+                        tempIndex = index;
+
+                        //Loops untill white piece is found, edge of board is found, or black piece is found
+                        do
+                        {
+                            tempIndex += 1;
+
+                            temp = temp2.DeepCopy();
+                            temp._board[tempIndex] = Pieces.WQueen;
+
+                            if (_board[tempIndex].IsBlack())
+                            {
+                                temp.HalfmoveClock = 0;
+                                boards.Add(temp.DeepCopy());
+                                break;
+                            }
+
+                            boards.Add(temp.DeepCopy());
+
+                        } while (index % 8 != 7 && !_board[index + 1].IsWhite());
+                    }
+
+                    //Moving up
+                    if (index / 8 != 7 && !_board[index + 8].IsWhite())
+                    {
+                        tempIndex = index;
+
+                        //Loops untill white piece is found, edge of board is found, or black piece is found
+                        do
+                        {
+                            tempIndex += 8;
+
+                            temp = temp2.DeepCopy();
+                            temp._board[tempIndex] = Pieces.WQueen;
+
+                            if (_board[tempIndex].IsBlack())
+                            {
+                                temp.HalfmoveClock = 0;
+                                boards.Add(temp.DeepCopy());
+                                break;
+                            }
+
+                            boards.Add(temp.DeepCopy());
+
+                        } while (index / 8 != 7 && !_board[index + 8].IsWhite());
+                    }
+
+                    //Moving down
+                    if (index / 8 != 0 && !_board[index - 8].IsWhite())
+                    {
+                        tempIndex = index;
+
+                        //Loops untill white piece is found, edge of board is found, or black piece is found
+                        do
+                        {
+                            tempIndex -= 8;
+
+                            temp = temp2.DeepCopy();
+                            temp._board[tempIndex] = Pieces.WQueen;
+
+                            if (_board[tempIndex].IsBlack())
+                            {
+                                temp.HalfmoveClock = 0;
+                                boards.Add(temp.DeepCopy());
+                                break;
+                            }
+
+                            boards.Add(temp.DeepCopy());
+
+                        } while (index / 8 != 0 && !_board[index - 8].IsWhite());
+                    }
+
+                    //Moving queen in quad 1 (if not on the far left side of the board)
+                    if (index % 8 != 7 && index / 8 != 7 && !_board[index + 9].IsWhite())
+                    {
+                        tempIndex = index;
+
+                        //Loops untill white piece is found, edge of board is found, or black piece is found
+                        do
+                        {
+                            tempIndex += 9;
+
+                            temp = temp2.DeepCopy();
+                            temp._board[tempIndex] = Pieces.WQueen;
+
+                            if (_board[tempIndex].IsBlack())
+                            {
+                                temp.HalfmoveClock = 0;
+                                boards.Add(temp.DeepCopy());
+                                break;
+                            }
+
+                            boards.Add(temp.DeepCopy());
+
+                        } while (tempIndex % 8 != 7 && tempIndex / 8 != 7 && !_board[tempIndex + 9].IsWhite());
+                    }
+
+                    //Moving queen in quad 2 (if not on the far left side of the board)
+                    if (index % 8 != 0 && index / 8 != 7 && !_board[index + 7].IsWhite())
+                    {
+                        tempIndex = index;
+
+                        //Loops untill white piece is found, edge of board is found, or black piece is found
+                        do
+                        {
+                            tempIndex += 7;
+
+                            temp = temp2.DeepCopy();
+                            temp._board[tempIndex] = Pieces.WQueen;
+
+                            if (_board[tempIndex].IsBlack())
+                            {
+                                temp.HalfmoveClock = 0;
+                                boards.Add(temp.DeepCopy());
+                                break;
+                            }
+
+                            boards.Add(temp.DeepCopy());
+
+                        } while (tempIndex % 8 != 0 && tempIndex / 8 != 7 && !_board[tempIndex + 7].IsWhite());
+                    }
+
+                    //Moving queen in quad 3 (if not on the far left side of the board)
+                    if (index % 8 != 0 && index / 8 != 0 && !_board[index - 9].IsWhite())
+                    {
+                        tempIndex = index;
+
+                        //Loops untill white piece is found, edge of board is found, or black piece is found
+                        do
+                        {
+                            tempIndex -= 9;
+
+                            temp = temp2.DeepCopy();
+                            temp._board[tempIndex] = Pieces.WQueen;
+
+                            if (_board[tempIndex].IsBlack())
+                            {
+                                temp.HalfmoveClock = 0;
+                                boards.Add(temp.DeepCopy());
+                                break;
+                            }
+
+                            boards.Add(temp.DeepCopy());
+
+                        } while (tempIndex % 8 != 0 && tempIndex / 8 != 0 && !_board[tempIndex - 9].IsWhite());
+                    }
+
+                    //Moving queen in quad 4 (if not on the far left side of the board)
+                    if (index % 8 != 7 && index / 8 != 0 && !_board[index - 7].IsWhite())
+                    {
+                        tempIndex = index;
+
+                        //Loops untill white piece is found, edge of board is found, or black piece is found
+                        do
+                        {
+                            tempIndex -= 7;
+
+                            temp = temp2.DeepCopy();
+                            temp._board[tempIndex] = Pieces.WQueen;
+
+                            if (_board[tempIndex].IsBlack())
+                            {
+                                temp.HalfmoveClock = 0;
+                                boards.Add(temp.DeepCopy());
+                                break;
+                            }
+
+                            boards.Add(temp.DeepCopy());
+
+                        } while (tempIndex % 8 != 7 && tempIndex / 8 != 0 && !_board[tempIndex - 7].IsWhite());
+                    }
+
                     break;
+
                 case Pieces.WKing:
                     //If not white's turn
                     if (!Turn)
                     {
-                        return boards.ToArray();
+                        break;
                     }
+
+                    temp2 = DeepCopy();
+                    temp2._board[index] = Pieces.Empty;
+                    temp2.BKCastled = false;
+                    temp2.BQCastled = false;
+                    temp2.Turn = false;
+                    temp2.EnPassant = null;
+                    temp2.HalfmoveClock++;
+                    temp2.WKCastle = false;
+                    temp2.WQCastle = false;
+
+                    //Moving king up
+                    if (index / 8 != 7 && !_board[index + 8].IsWhite())
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index + 8] = Pieces.WKing;
+
+                        if (_board[index + 8].IsBlack())
+                        {
+                            temp.HalfmoveClock = 0;
+                        }
+
+                        boards.Add(temp.DeepCopy());
+                    }
+
+                    //Moving king to the left
+                    if (index % 8 != 0 && !_board[index - 1].IsWhite())
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index - 1] = Pieces.WKing;
+
+                        if (_board[index - 1].IsBlack())
+                        {
+                            temp.HalfmoveClock = 0;
+                        }
+
+                        boards.Add(temp.DeepCopy());
+                    }
+
+                    //Moving king to down
+                    if (index / 8 != 0 && !_board[index - 8].IsWhite())
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index - 8] = Pieces.WKing;
+
+                        if (_board[index - 8].IsBlack())
+                        {
+                            temp.HalfmoveClock = 0;
+                        }
+
+                        boards.Add(temp.DeepCopy());
+                    }
+
+                    //Moving king to the right
+                    if (index % 8 != 7 && !_board[index + 1].IsWhite())
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index + 1] = Pieces.WKing;
+
+                        if (_board[index + 1].IsBlack())
+                        {
+                            temp.HalfmoveClock = 0;
+                        }
+
+                        boards.Add(temp.DeepCopy());
+                    }
+
+                    //Moving king into quad 1
+                    if (index % 8 != 7 && index / 8 != 7 && !_board[index + 9].IsWhite())
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index + 9] = Pieces.WKing;
+
+                        if (_board[index + 9].IsBlack())
+                        {
+                            temp.HalfmoveClock = 0;
+                        }
+
+                        boards.Add(temp.DeepCopy());
+                    }
+
+                    //Moving king into quad 2
+                    if (index % 8 != 0 && index / 8 != 7 && !_board[index + 7].IsWhite())
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index + 7] = Pieces.WKing;
+
+                        if (_board[index + 7].IsBlack())
+                        {
+                            temp.HalfmoveClock = 0;
+                        }
+
+                        boards.Add(temp.DeepCopy());
+                    }
+
+                    //Moving king into quad 3
+                    if (index % 8 != 0 && index / 8 != 0 && !_board[index - 9].IsWhite())
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index - 9] = Pieces.WKing;
+
+                        if (_board[index - 9].IsBlack())
+                        {
+                            temp.HalfmoveClock = 0;
+                        }
+
+                        boards.Add(temp.DeepCopy());
+                    }
+
+                    //Moving king into quad 4
+                    if (index % 8 != 7 && index / 8 != 0 && !_board[index - 7].IsWhite())
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index - 7] = Pieces.WKing;
+
+                        if (_board[index - 7].IsBlack())
+                        {
+                            temp.HalfmoveClock = 0;
+                        }
+
+                        boards.Add(temp.DeepCopy());
+                    }
+
+                    //Castleing king side
+                    if (_board[index + 1] == Pieces.Empty && _board[index + 2] == Pieces.Empty && WKCastle)
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index + 2] = Pieces.WKing;
+                        temp._board[index + 1] = Pieces.WRook;
+                        temp._board[index + 3] = Pieces.Empty;
+                        temp.WKCastled = true;
+                        boards.Add(temp.DeepCopy());
+                    }
+
+                    //Castleing queen side
+                    if (_board[index - 1] == Pieces.Empty && _board[index - 2] == Pieces.Empty && _board[index - 3] == Pieces.Empty && WQCastle)
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index - 2] = Pieces.WKing;
+                        temp._board[index - 1] = Pieces.WRook;
+                        temp._board[index - 4] = Pieces.Empty;
+                        temp.WQCastled = true;
+                        boards.Add(temp.DeepCopy());
+                    }
+
                     break;
+
                 case Pieces.BPawn:
                     //If not blacks's turn
                     if (Turn)
                     {
-                        return boards.ToArray();
+                        break;
                     }
+
+                    temp2 = DeepCopy();
+                    temp2._board[index] = Pieces.Empty;
+                    temp2.WKCastled = false;
+                    temp2.WQCastled = false;
+                    temp2.Turn = true;
+                    temp2.EnPassant = null;
+                    temp2.FullMoveCount++;
+                    temp2.HalfmoveClock = 0;
+
+                    //Moving pawn one square down
+                    if (_board[index - 8] == Pieces.Empty)
+                    {
+                        temp = temp2.DeepCopy();
+
+                        //Pawn promotion
+                        if (index < 8)
+                        {
+                            temp._board[index - 8] = Pieces.WKnight;
+                            boards.Add(temp.DeepCopy());
+
+                            temp._board[index - 8] = Pieces.WQueen;
+                            boards.Add(temp.DeepCopy());
+                        }
+                        //If not promoting
+                        else
+                        {
+                            temp._board[index - 8] = Pieces.WPawn;
+                            boards.Add(temp.DeepCopy());
+                        }
+                    }
+                    
+                    //Taking to the left
+                    if (_board[index - 9].IsBlack() && (index % 8) != 0)
+                    {
+                        temp = temp2.DeepCopy();
+
+                        //Pawn promotion
+                        if (index < 8)
+                        {
+                            temp._board[index - 9] = Pieces.WKnight;
+                            boards.Add(temp.DeepCopy());
+
+                            temp._board[index - 9] = Pieces.WQueen;
+                            boards.Add(temp.DeepCopy());
+                        }//If not promoting
+                        else
+                        {
+                            temp._board[index - 9] = Pieces.WPawn;
+                            boards.Add(temp.DeepCopy());
+                        }
+                    }
+
+                    //Taking to the left en passant
+                    if (index - 9 == EnPassant.Value.file + EnPassant.Value.rank * 8)
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index - 9] = Pieces.WPawn;
+                        temp._board[index - 1] = Pieces.Empty;
+                        boards.Add(temp.DeepCopy());
+                    }
+                    
+                    //Taking to the right
+                    if (_board[index - 7].IsBlack() && (index % 8) != 7)
+                    {
+                        temp = temp2.DeepCopy();
+
+                        //Pawn promotion
+                        if (index < 8)
+                        {
+                            temp._board[index - 7] = Pieces.WBishop;
+                            boards.Add(temp.DeepCopy());
+
+                            temp._board[index - 7] = Pieces.WKnight;
+                            boards.Add(temp.DeepCopy());
+
+                            temp._board[index - 7] = Pieces.WRook;
+                            boards.Add(temp.DeepCopy());
+
+                            temp._board[index - 7] = Pieces.WQueen;
+                            boards.Add(temp.DeepCopy());
+                        }
+                        //If not promoting
+                        else
+                        {
+                            temp._board[index - 7] = Pieces.WPawn;
+                            boards.Add(temp.DeepCopy());
+                        }
+                    }
+                    
+                    //Taking to the right en passant
+                    if (index - 7 == EnPassant.Value.file + EnPassant.Value.rank * 8)
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index - 7] = Pieces.WPawn;
+                        temp._board[index + 1] = Pieces.Empty;
+                        boards.Add(temp.DeepCopy());
+                    }
+
+                    //Moving up two squares
+                    if (index < 16 && _board[index + 16] == Pieces.Empty && _board[index + 8] == Pieces.Empty)
+                    {
+                        temp = temp2.DeepCopy();
+
+                        temp._board[index + 16] = Pieces.WPawn;
+                        temp.EnPassant = new ChessCoord(index % 8, (index + 8) / 8);
+
+                        boards.Add(temp.DeepCopy());
+                    }
+
                     break;
+
                 case Pieces.BRook:
                     //If not blacks's turn
                     if (Turn)
                     {
-                        return boards.ToArray();
+                        break;
                     }
+
+                    temp2 = DeepCopy();
+                    temp2._board[index] = Pieces.Empty;
+                    temp2.WKCastled = false;
+                    temp2.WQCastled = false;
+                    temp2.Turn = true;
+                    temp2.EnPassant = null;
+                    temp2.FullMoveCount++;
+                    temp2.HalfmoveClock++;
+
+                    //Moving rook to the left (if not on the far left side of the board)
+                    if (index % 8 != 0 && !_board[index - 1].IsBlack())
+                    {
+                        tempIndex = index;
+
+                        //Loops untill white piece is found, edge of board is found, or black piece is found
+                        do
+                        {
+                            tempIndex -= 1;
+
+                            temp = temp2.DeepCopy();
+                            temp._board[tempIndex] = Pieces.BRook;
+
+                            if (index == 63)
+                            {
+                                temp.BKCastle = false;
+                            }
+
+                            if (_board[tempIndex].IsWhite())
+                            {
+                                temp.HalfmoveClock = 0;
+                                boards.Add(temp.DeepCopy());
+                                break;
+                            }
+
+                            boards.Add(temp.DeepCopy());
+
+                        } while (index % 8 != 0 && !_board[index - 1].IsBlack());
+                    }
+
+                    //Moving to the right
+                    if (index % 8 != 7 && !_board[index + 1].IsBlack())
+                    {
+                        tempIndex = index;
+
+                        //Loops untill white piece is found, edge of board is found, or black piece is found
+                        do
+                        {
+                            tempIndex += 1;
+
+                            temp = temp2.DeepCopy();
+                            temp._board[tempIndex] = Pieces.BRook;
+
+                            if (index == 56)
+                            {
+                                temp.BQCastle = false;
+                            }
+
+                            if (_board[tempIndex].IsWhite())
+                            {
+                                temp.HalfmoveClock = 0;
+                                boards.Add(temp.DeepCopy());
+                                break;
+                            }
+
+                            boards.Add(temp.DeepCopy());
+
+                        } while (index % 8 != 7 && !_board[index + 1].IsBlack());
+                    }
+
+                    //Moving up
+                    if (index / 8 != 7 && !_board[index + 8].IsBlack())
+                    {
+                        tempIndex = index;
+
+                        //Loops untill white piece is found, edge of board is found, or black piece is found
+                        do
+                        {
+                            tempIndex += 8;
+
+                            temp = temp2.DeepCopy();
+                            temp._board[tempIndex] = Pieces.BRook;
+
+                            if (_board[tempIndex].IsWhite())
+                            {
+                                temp.HalfmoveClock = 0;
+                                boards.Add(temp.DeepCopy());
+                                break;
+                            }
+
+                            boards.Add(temp.DeepCopy());
+
+                        } while (index / 8 != 7 && !_board[index + 8].IsBlack());
+                    }
+
+                    //Moving down
+                    if (index / 8 != 0 && !_board[index - 8].IsBlack())
+                    {
+                        tempIndex = index;
+
+                        //Loops untill white piece is found, edge of board is found, or black piece is found
+                        do
+                        {
+                            tempIndex -= 8;
+
+                            temp = temp2.DeepCopy();
+                            temp._board[tempIndex] = Pieces.BRook;
+
+                            if (index == 56)
+                            {
+                                temp.BQCastle = false;
+                            }
+                            else if (index == 63)
+                            {
+                                temp.BKCastle = false;
+                            }
+
+                            if (_board[tempIndex].IsWhite())
+                            {
+                                temp.HalfmoveClock = 0;
+                                boards.Add(temp.DeepCopy());
+                                break;
+                            }
+
+                            boards.Add(temp.DeepCopy());
+
+                        } while (index / 8 != 0 && !_board[index - 8].IsBlack());
+                    }
+
                     break;
+
                 case Pieces.BKnight:
                     //If not blacks's turn
                     if (Turn)
                     {
-                        return boards.ToArray();
+                        break;
                     }
+
+                    temp2 = DeepCopy();
+                    temp2._board[index] = Pieces.Empty;
+                    temp2.WKCastled = false;
+                    temp2.WQCastled = false;
+                    temp2.Turn = true;
+                    temp2.EnPassant = null;
+                    temp2.FullMoveCount++;
+                    temp2.HalfmoveClock++;
+
+                    // Quad 2 lower
+                    if (((index - 2) % 8 < index % 8) && ((index + 8) / 8 % 8 > index / 8) && !_board[index + 6].IsBlack())
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index + 6] = Pieces.BKnight;
+
+                        if (_board[index + 6].IsWhite())
+                        {
+                            temp.HalfmoveClock = 0;
+                        }
+
+                        boards.Add(temp.DeepCopy());
+                    }
+
+                    // Quad 2 higher
+                    if (((index - 1) % 8 < index % 8) && ((index + 16) / 8 % 8 > index / 8) && !_board[index + 15].IsBlack())
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index +  15] = Pieces.BKnight;
+
+                        if (_board[index + 15].IsWhite())
+                        {
+                            temp.HalfmoveClock = 0;
+                        }
+
+                        boards.Add(temp.DeepCopy());
+                    }
+
+                    // Quad 1 higher
+                    if (((index + 1) % 8 > index % 8) && ((index + 16) / 8 % 8 > index / 8) && !_board[index + 17].IsBlack())
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index + 17] = Pieces.BKnight;
+
+                        if (_board[index + 17].IsWhite())
+                        {
+                            temp.HalfmoveClock = 0;
+                        }
+
+                        boards.Add(temp.DeepCopy());
+                    }
+
+                    // Quad 1 lower
+                    if (((index + 2) % 8 > index % 8) && ((index + 8) / 8 % 8 > index / 8) && !_board[index + 10].IsBlack())
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index + 10] = Pieces.BKnight;
+
+                        if (_board[index + 10].IsWhite())
+                        {
+                            temp.HalfmoveClock = 0;
+                        }
+
+                        boards.Add(temp.DeepCopy());
+                    }
+
+                    // Quad 4 higher
+                    if (((index + 2) % 8 > index % 8) && ((index - 8) / 8 % 8 < index / 8) && !_board[index - 6].IsBlack())
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index - 6] = Pieces.BKnight;
+
+                        if (_board[index - 6].IsWhite())
+                        {
+                            temp.HalfmoveClock = 0;
+                        }
+
+                        boards.Add(temp.DeepCopy());
+                    }
+
+                    // Quad 4 lower
+                    if (((index + 1) % 8 > index % 8) && ((index - 16) / 8 % 8 < index / 8) && !_board[index - 15].IsBlack())
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index - 15] = Pieces.BKnight;
+
+                        if (_board[index - 15].IsWhite())
+                        {
+                            temp.HalfmoveClock = 0;
+                        }
+
+                        boards.Add(temp.DeepCopy());
+                    }
+
+                    // Quad 3 lower
+                    if (((index - 1) % 8 < index % 8) && ((index - 16) / 8 % 8 < index / 8) && !_board[index - 17].IsBlack())
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index - 17] = Pieces.BKnight;
+
+                        if (_board[index - 17].IsWhite())
+                        {
+                            temp.HalfmoveClock = 0;
+                        }
+
+                        boards.Add(temp.DeepCopy());
+                    }
+
+                    // Quad 3 higher
+                    if (((index - 2) % 8 < index % 8) && ((index - 8) / 8 % 8 < index / 8) && !_board[index - 10].IsBlack())
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index - 10] = Pieces.BKnight;
+
+                        if (_board[index - 10].IsWhite())
+                        {
+                            temp.HalfmoveClock = 0;
+                        }
+
+                        boards.Add(temp.DeepCopy());
+                    }
+
                     break;
+
                 case Pieces.BBishop:
                     //If not blacks's turn
                     if (Turn)
                     {
-                        return boards.ToArray();
+                        break;
                     }
+
+                    temp2 = DeepCopy();
+                    temp2._board[index] = Pieces.Empty;
+                    temp2.WKCastled = false;
+                    temp2.WQCastled = false;
+                    temp2.Turn = true;
+                    temp2.EnPassant = null;
+                    temp2.FullMoveCount++;
+                    temp2.HalfmoveClock++;
+
+                    //Moving bishop in quad 1 (if not on the far left side of the board)
+                    if (index % 8 != 7 && index / 8 != 7 && !_board[index + 9].IsBlack())
+                    {
+                        tempIndex = index;
+
+                        //Loops untill white piece is found, edge of board is found, or black piece is found
+                        do
+                        {
+                            tempIndex += 9;
+
+                            temp = temp2.DeepCopy();
+                            temp._board[tempIndex] = Pieces.BBishop;
+
+                            if (_board[tempIndex].IsWhite())
+                            {
+                                temp.HalfmoveClock = 0;
+                                boards.Add(temp.DeepCopy());
+                                break;
+                            }
+
+                            boards.Add(temp.DeepCopy());
+
+                        } while (tempIndex % 8 != 7 && tempIndex / 8 != 7 && !_board[tempIndex + 9].IsBlack());
+                    }
+
+                    //Moving bishop in quad 2 (if not on the far left side of the board)
+                    if (index % 8 != 0 && index / 8 != 7 && !_board[index + 7].IsBlack())
+                    {
+                        tempIndex = index;
+
+                        //Loops untill white piece is found, edge of board is found, or black piece is found
+                        do
+                        {
+                            tempIndex += 7;
+
+                            temp = temp2.DeepCopy();
+                            temp._board[tempIndex] = Pieces.BBishop;
+
+                            if (_board[tempIndex].IsWhite())
+                            {
+                                temp.HalfmoveClock = 0;
+                                boards.Add(temp.DeepCopy());
+                                break;
+                            }
+
+                            boards.Add(temp.DeepCopy());
+
+                        } while (tempIndex % 8 != 0 && tempIndex / 8 != 7 && !_board[tempIndex + 7].IsBlack());
+                    }
+
+                    //Moving bishop in quad 3 (if not on the far left side of the board)
+                    if (index % 8 != 0 && index / 8 != 0 && !_board[index - 9].IsBlack())
+                    {
+                        tempIndex = index;
+
+                        //Loops untill white piece is found, edge of board is found, or black piece is found
+                        do
+                        {
+                            tempIndex -= 9;
+
+                            temp = temp2.DeepCopy();
+                            temp._board[tempIndex] = Pieces.BBishop;
+
+                            if (_board[tempIndex].IsWhite())
+                            {
+                                temp.HalfmoveClock = 0;
+                                boards.Add(temp.DeepCopy());
+                                break;
+                            }
+
+                            boards.Add(temp.DeepCopy());
+
+                        } while (tempIndex % 8 != 0 && tempIndex / 8 != 0 && !_board[tempIndex - 9].IsBlack());
+                    }
+
+                    //Moving bishop in quad 1 (if not on the far left side of the board)
+                    if (index % 8 != 7 && index / 8 != 0 && !_board[index - 7].IsBlack())
+                    {
+                        tempIndex = index;
+
+                        //Loops untill white piece is found, edge of board is found, or black piece is found
+                        do
+                        {
+                            tempIndex -= 7;
+
+                            temp = temp2.DeepCopy();
+                            temp._board[tempIndex] = Pieces.BBishop;
+
+                            if (_board[tempIndex].IsWhite())
+                            {
+                                temp.HalfmoveClock = 0;
+                                boards.Add(temp.DeepCopy());
+                                break;
+                            }
+
+                            boards.Add(temp.DeepCopy());
+
+                        } while (tempIndex % 8 != 7 && tempIndex / 8 != 0 && !_board[tempIndex - 7].IsBlack());
+                    }
+
                     break;
+
                 case Pieces.BQueen:
                     //If not blacks's turn
                     if (Turn)
                     {
-                        return boards.ToArray();
+                        break;
                     }
+
+                    temp2 = DeepCopy();
+                    temp2._board[index] = Pieces.Empty;
+                    temp2.WKCastled = false;
+                    temp2.WQCastled = false;
+                    temp2.Turn = true;
+                    temp2.EnPassant = null;
+                    temp2.FullMoveCount++;
+                    temp2.HalfmoveClock++;
+
+                    //Moving queen to the left (if not on the far left side of the board)
+                    if (index % 8 != 0 && !_board[index - 1].IsBlack())
+                    {
+                        tempIndex = index;
+
+                        //Loops untill white piece is found, edge of board is found, or black piece is found
+                        do
+                        {
+                            tempIndex -= 1;
+
+                            temp = temp2.DeepCopy();
+                            temp._board[tempIndex] = Pieces.BQueen;
+
+                            if (_board[tempIndex].IsWhite())
+                            {
+                                temp.HalfmoveClock = 0;
+                                boards.Add(temp.DeepCopy());
+                                break;
+                            }
+
+                            boards.Add(temp.DeepCopy());
+
+                        } while (index % 8 != 0 && !_board[index - 1].IsBlack());
+                    }
+
+                    //Moving to the right
+                    if (index % 8 != 7 && !_board[index + 1].IsBlack())
+                    {
+                        tempIndex = index;
+
+                        //Loops untill white piece is found, edge of board is found, or black piece is found
+                        do
+                        {
+                            tempIndex += 1;
+
+                            temp = temp2.DeepCopy();
+                            temp._board[tempIndex] = Pieces.BQueen;
+
+                            if (_board[tempIndex].IsWhite())
+                            {
+                                temp.HalfmoveClock = 0;
+                                boards.Add(temp.DeepCopy());
+                                break;
+                            }
+
+                            boards.Add(temp.DeepCopy());
+
+                        } while (index % 8 != 7 && !_board[index + 1].IsBlack());
+                    }
+
+                    //Moving up
+                    if (index / 8 != 7 && !_board[index + 8].IsBlack())
+                    {
+                        tempIndex = index;
+
+                        //Loops untill white piece is found, edge of board is found, or black piece is found
+                        do
+                        {
+                            tempIndex += 8;
+
+                            temp = temp2.DeepCopy();
+                            temp._board[tempIndex] = Pieces.BQueen;
+
+                            if (_board[tempIndex].IsWhite())
+                            {
+                                temp.HalfmoveClock = 0;
+                                boards.Add(temp.DeepCopy());
+                                break;
+                            }
+
+                            boards.Add(temp.DeepCopy());
+
+                        } while (index / 8 != 7 && !_board[index + 8].IsBlack());
+                    }
+
+                    //Moving down
+                    if (index / 8 != 0 && !_board[index - 8].IsBlack())
+                    {
+                        tempIndex = index;
+
+                        //Loops untill white piece is found, edge of board is found, or black piece is found
+                        do
+                        {
+                            tempIndex -= 8;
+
+                            temp = temp2.DeepCopy();
+                            temp._board[tempIndex] = Pieces.BQueen;
+
+                            if (_board[tempIndex].IsWhite())
+                            {
+                                temp.HalfmoveClock = 0;
+                                boards.Add(temp.DeepCopy());
+                                break;
+                            }
+
+                            boards.Add(temp.DeepCopy());
+
+                        } while (index / 8 != 0 && !_board[index - 8].IsBlack());
+                    }
+
+                    //Moving queen in quad 1 (if not on the far left side of the board)
+                    if (index % 8 != 7 && index / 8 != 7 && !_board[index + 9].IsBlack())
+                    {
+                        tempIndex = index;
+
+                        //Loops untill white piece is found, edge of board is found, or black piece is found
+                        do
+                        {
+                            tempIndex += 9;
+
+                            temp = temp2.DeepCopy();
+                            temp._board[tempIndex] = Pieces.BQueen;
+
+                            if (_board[tempIndex].IsWhite())
+                            {
+                                temp.HalfmoveClock = 0;
+                                boards.Add(temp.DeepCopy());
+                                break;
+                            }
+
+                            boards.Add(temp.DeepCopy());
+
+                        } while (tempIndex % 8 != 7 && tempIndex / 8 != 7 && !_board[tempIndex + 9].IsBlack());
+                    }
+
+                    //Moving queen in quad 2 (if not on the far left side of the board)
+                    if (index % 8 != 0 && index / 8 != 7 && !_board[index + 7].IsBlack())
+                    {
+                        tempIndex = index;
+
+                        //Loops untill white piece is found, edge of board is found, or black piece is found
+                        do
+                        {
+                            tempIndex += 7;
+
+                            temp = temp2.DeepCopy();
+                            temp._board[tempIndex] = Pieces.BQueen;
+
+                            if (_board[tempIndex].IsWhite())
+                            {
+                                temp.HalfmoveClock = 0;
+                                boards.Add(temp.DeepCopy());
+                                break;
+                            }
+
+                            boards.Add(temp.DeepCopy());
+
+                        } while (tempIndex % 8 != 0 && tempIndex / 8 != 7 && !_board[tempIndex + 7].IsBlack());
+                    }
+
+                    //Moving queen in quad 3 (if not on the far left side of the board)
+                    if (index % 8 != 0 && index / 8 != 0 && !_board[index - 9].IsBlack())
+                    {
+                        tempIndex = index;
+
+                        //Loops untill white piece is found, edge of board is found, or black piece is found
+                        do
+                        {
+                            tempIndex -= 9;
+
+                            temp = temp2.DeepCopy();
+                            temp._board[tempIndex] = Pieces.BQueen;
+
+                            if (_board[tempIndex].IsWhite())
+                            {
+                                temp.HalfmoveClock = 0;
+                                boards.Add(temp.DeepCopy());
+                                break;
+                            }
+
+                            boards.Add(temp.DeepCopy());
+
+                        } while (tempIndex % 8 != 0 && tempIndex / 8 != 0 && !_board[tempIndex - 9].IsBlack());
+                    }
+
+                    //Moving queen in quad 4 (if not on the far left side of the board)
+                    if (index % 8 != 7 && index / 8 != 0 && !_board[index - 7].IsBlack())
+                    {
+                        tempIndex = index;
+
+                        //Loops untill white piece is found, edge of board is found, or black piece is found
+                        do
+                        {
+                            tempIndex -= 7;
+
+                            temp = temp2.DeepCopy();
+                            temp._board[tempIndex] = Pieces.BQueen;
+
+                            if (_board[tempIndex].IsWhite())
+                            {
+                                temp.HalfmoveClock = 0;
+                                boards.Add(temp.DeepCopy());
+                                break;
+                            }
+
+                            boards.Add(temp.DeepCopy());
+
+                        } while (tempIndex % 8 != 7 && tempIndex / 8 != 0 && !_board[tempIndex - 7].IsBlack());
+                    }
+
                     break;
                 case Pieces.BKing:
                     //If not blacks's turn
                     if (Turn)
                     {
-                        return boards.ToArray();
+                        break;
                     }
+
+                    temp2 = DeepCopy();
+                    temp2._board[index] = Pieces.Empty;
+                    temp2.WKCastled = false;
+                    temp2.WQCastled = false;
+                    temp2.Turn = true;
+                    temp2.EnPassant = null;
+                    temp2.FullMoveCount++;
+                    temp2.HalfmoveClock++;
+                    temp2.BKCastle = false;
+                    temp2.BQCastle = false;
+
+                    //Moving king up
+                    if (index / 8 != 7 && !_board[index + 8].IsBlack())
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index + 8] = Pieces.BKing;
+
+                        if (_board[index + 8].IsWhite())
+                        {
+                            temp.HalfmoveClock = 0;
+                        }
+
+                        boards.Add(temp.DeepCopy());
+                    }
+
+                    //Moving king to the left
+                    if (index % 8 != 0 && !_board[index - 1].IsBlack())
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index - 1] = Pieces.BKing;
+
+                        if (_board[index - 1].IsWhite())
+                        {
+                            temp.HalfmoveClock = 0;
+                        }
+
+                        boards.Add(temp.DeepCopy());
+                    }
+
+                    //Moving king to down
+                    if (index / 8 != 0 && !_board[index - 8].IsBlack())
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index - 8] = Pieces.BKing;
+
+                        if (_board[index - 8].IsWhite())
+                        {
+                            temp.HalfmoveClock = 0;
+                        }
+
+                        boards.Add(temp.DeepCopy());
+                    }
+
+                    //Moving king to the right
+                    if (index % 8 != 7 && !_board[index + 1].IsBlack())
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index + 1] = Pieces.BKing;
+
+                        if (_board[index + 1].IsWhite())
+                        {
+                            temp.HalfmoveClock = 0;
+                        }
+
+                        boards.Add(temp.DeepCopy());
+                    }
+
+                    //Moving king into quad 1
+                    if (index % 8 != 7 && index / 8 != 7 && !_board[index + 9].IsBlack())
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index + 9] = Pieces.BKing;
+
+                        if (_board[index + 9].IsWhite())
+                        {
+                            temp.HalfmoveClock = 0;
+                        }
+
+                        boards.Add(temp.DeepCopy());
+                    }
+
+                    //Moving king into quad 2
+                    if (index % 8 != 0 && index / 8 != 7 && !_board[index + 7].IsBlack())
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index + 7] = Pieces.BKing;
+
+                        if (_board[index + 7].IsWhite())
+                        {
+                            temp.HalfmoveClock = 0;
+                        }
+
+                        boards.Add(temp.DeepCopy());
+                    }
+
+                    //Moving king into quad 3
+                    if (index % 8 != 0 && index / 8 != 0 && !_board[index - 9].IsBlack())
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index - 9] = Pieces.BKing;
+
+                        if (_board[index - 9].IsWhite())
+                        {
+                            temp.HalfmoveClock = 0;
+                        }
+
+                        boards.Add(temp.DeepCopy());
+                    }
+
+                    //Moving king into quad 4
+                    if (index % 8 != 7 && index / 8 != 0 && !_board[index - 7].IsBlack())
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index - 7] = Pieces.BKing;
+
+                        if (_board[index - 7].IsWhite())
+                        {
+                            temp.HalfmoveClock = 0;
+                        }
+
+                        boards.Add(temp.DeepCopy());
+                    }
+
+                    //Castleing king side
+                    if (_board[index + 1] == Pieces.Empty && _board[index + 2] == Pieces.Empty && WKCastle)
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index + 2] = Pieces.BKing;
+                        temp._board[index + 1] = Pieces.BRook;
+                        temp._board[index + 3] = Pieces.Empty;
+                        temp.BKCastled = true;
+                        boards.Add(temp.DeepCopy());
+                    }
+                    //Castleing queen side
+                    if (_board[index - 1] == Pieces.Empty && _board[index - 2] == Pieces.Empty && _board[index - 3] == Pieces.Empty && WQCastle)
+                    {
+                        temp = temp2.DeepCopy();
+                        temp._board[index - 2] = Pieces.BKing;
+                        temp._board[index - 1] = Pieces.BRook;
+                        temp._board[index - 4] = Pieces.Empty;
+                        temp.BQCastled = true;
+                        boards.Add(temp.DeepCopy());
+                    }
+
                     break;
+
                 default:
                     break;
+
+                //Update other 
             }
         }
 
